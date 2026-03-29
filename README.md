@@ -1,7 +1,7 @@
 # nova-aid
 uzaya gönderilmek istenen roket, uydu ve yörünge araçlarının belirli faktörler baz alınarak güvenlik riskini hesaplayarak yeryüzünde en uygun fırlatma noktalarını tespit eden ve roket kalkış ve ürün tedarik merkezlerini gösteren  yapay zeka destekli Chatbot modülü içeren simülasyon aracı tasarlanmıştır.
 
-## ![resim](/media/projects/images/69b93ea6cf29f08851b23c64/1774771195125_q8yxs1.jpeg)Proje Uçtan Uca Nasıl Çalışıyor?
+## Proje Uçtan Uca Nasıl Çalışıyor?
 Simülasyonumuz, Kritik Veri Entegrasyonu Sistemi üzerinden üç ana veri beslemesini birleştiren bir mimariye sahiptir:
 ## 
 Veri Katmanlarının Analizi:
