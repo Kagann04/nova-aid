@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nova-Aid | Tactical Flight Analytics v7.5</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <style>
+        :root { 
+            --neon: #00e5ff; --bg: #010409; --glass: rgba(13, 17, 23, 0.75); 
+            --fuel: #ffcc00; --border: rgba(0, 229, 255, 0.15);
+            --danger: #ff3e3e; --safe: #00ff88;
+        }
+        * { box-sizing: border-box; }
+        body, html { margin: 0; padding: 0; height: 100%; width: 100%; background: var(--bg); color: #f8f9fa; font-family: 'Outfit', sans-serif; overflow: hidden; }
+        #map { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; filter: saturate(0.8) contrast(1.1); }
+        .hud-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 100; background: radial-gradient(circle, transparent 40%, rgba(1, 4, 9, 0.85) 100%); }
+        
+        .ctl-group { position: absolute; top: 30px; left: 30px; z-index: 1000; display: flex; flex-direction: column; gap: 12px; pointer-events: auto; }
+        .hud-btn { 
+            background: var(--glass); border: 1px solid var(--border); color: #8fb9c6; padding: 12px 24px; border-radius: 4px; cursor: pointer; 
+            backdrop-filter: blur(25px); font-family: 'Outfit', sans-serif; font-size: 0.7rem; letter-spacing: 3px; 
+            transition: 0.4s; text-transform: uppercase; width: 240px; border-left: 3px solid var(--neon);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+        .hud-btn:hover { background: var(--neon); color: #000; transform: translateX(8px); box-shadow: 0 0 20px rgba(0, 229, 255, 0.3); }
+
+        .right-panel { 
+            position: absolute; top: 30px; right: 30px; width: 340px; max-height: 92vh; 
+            background: var(--glass); backdrop-filter: blur(40px); border: 1px solid var(--border);
+            border-right: 3px solid var(--neon); border-radius: 12px; padding: 24px; pointer-events: auto; z-index: 1000;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.8); overflow-y: auto;
+        }
+        .hud-header { font-size: 0.65rem; letter-spacing: 5px; color: var(--neon); text-transform: uppercase; margin-bottom: 20px; border-bottom: 1px solid rgba(0,229,255,0.2); padding-bottom: 10px; }
+        .metric { display: flex; justify-content: space-between; margin-bottom: 12px; background: rgba(255,255,255,0.03); padding: 8px; border-radius: 6px; }
+        .m-lab { font-size: 0.6rem; color: #8899aa; text-transform: uppercase; letter-spacing: 1px; }
+        .m-val { font-family: 'Share Tech Mono'; color: #fff; }
+        
+        .info-block { background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 6px; padding: 12px; margin-bottom: 15px; }
+        .info-title { font-size: 1.1rem; font-weight: bold; color: var(--neon); margin-bottom: 4px; line-height: 1.2; }
+        .info-sub { font-size: 0.7rem; color: #8899aa; letter-spacing: 1px; text-transform: uppercase; }
+
+        .fuel-block { margin-top: 15px; background: rgba(255,204,0,0.05); border: 1px dashed rgba(255,204,0,0.3); padding: 15px; border-radius: 8px; border-left: 3px solid var(--fuel); }
+        .efficiency-block { margin-top: 15px; background: rgba(0,229,255,0.05); border: 1px solid var(--border); padding: 15px; border-radius: 8px; border-left: 3px solid var(--neon); }
+        
+        .eff-bar-bg { height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; margin-top: 10px; overflow: hidden; }
+        .eff-bar-fill { height: 100%; background: var(--neon); width: 0%; transition: 1s cubic-bezier(0.16, 1, 0.3, 1); box-shadow: 0 0 10px var(--neon); }
+        .status-hero { margin-top: 25px; padding: 18px; text-align: center; font-family: 'Share Tech Mono'; font-weight: bold; border-radius: 6px; border: 1px solid; letter-spacing: 1px; }
+        .go { color: var(--safe); border-color: var(--safe); box-shadow: 0 0 20px rgba(0,255,136,0.15); background: rgba(0, 255, 136, 0.05); }
+        .abort { color: var(--danger); border-color: var(--danger); box-shadow: 0 0 20px rgba(255,62,62,0.15); background: rgba(255, 62, 62, 0.05); }
+        
+        #search-side { position: fixed; top: 30px; left: -400px; width: 350px; height: calc(100vh - 60px); background: rgba(1,4,9,0.95); backdrop-filter: blur(40px); border: 1px solid var(--border); transition: 0.6s cubic-bezier(0.16, 1, 0.3, 1); padding: 30px; z-index: 2000; border-radius: 0 12px 12px 0; }
+        #search-side.active { left: 0; }
+        .search-in { background: rgba(0,0,0,0.5); border: 1px solid var(--border); border-radius: 6px; padding: 12px; width: 100%; color: var(--neon); font-family: 'Share Tech Mono'; margin-top: 10px; outline: none; }
+        .coord-footer { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); background: var(--glass); backdrop-filter: blur(20px); padding: 12px 40px; border-radius: 50px; border: 1px solid var(--border); display: flex; gap: 40px; pointer-events: auto; }
+    </style>
+</head>
+<body>
+    <div class="ctl-group">
+        <button class="hud-btn" onclick="window.location.href='index.html'">🌍 DÜNYAYA DÖN</button>
+        <button class="hud-btn" onclick="toggleSearch()">Konum Botu</button>
+        <button class="hud-btn" onclick="window.location.reload()">🔄 SİSTEM SIFIRLA</button>
+    </div>
+    <div id="search-side">
+        <div class="hud-header">Konum Verisi Girişi</div>
+        <input id="search-in" class="search-in" placeholder="İŞLETME VEYA ŞEHİR..." onkeypress="if(event.key==='Enter') runSearchOp()">
+        <button onclick="runSearchOp()" style="width:100%; margin-top:15px; background:var(--neon); border:none; padding:12px; font-weight:bold; cursor:pointer; border-radius:6px; font-size:0.7rem; letter-spacing:1px; color:#000;">ANALİZ ET</button>
+        <div id="search-logs" style="margin-top:20px; font-family:'Share Tech Mono'; font-size:0.7rem; color:#667788; line-height:1.6;">> SİSTEM ÇEVRİMİÇİ...</div>
+        <div style="margin-top:20px; text-align:center; color:#555; cursor:pointer; font-size:0.7rem;" onclick="toggleSearch()">[ TERMİNALİ KAPAT ]</div>
+    </div>
+    <div id="map"></div>
+    <div class="hud-overlay">
+        <div class="right-panel" id="uiRoot" style="display:none;">
+            <div class="hud-header">Nova-Aid Lokasyon Analitiği</div>
+            
+            <div class="info-block">
+                <div id="p-company" class="info-title">Global Target</div>
+                <div id="p-location" class="info-sub">--</div>
+            </div>
+
+            <!-- Sadece Lojistik Noktalarında Gözükecek Bölüm -->
+            <div id="logistic-ext" style="display:none; margin:15px 0;">
+                <div class="metric"><span class="m-lab">📂 KATEGORİ</span><span id="p-cat" class="m-val">--</span></div>
+                <div class="metric"><span class="m-lab">⚙️ ALT SİSTEM</span><span id="p-sub" class="m-val">--</span></div>
+                <div class="metric"><span class="m-lab">🚚 SEVKİYAT</span><span id="p-ship" class="m-val">--</span></div>
+            </div>
+
+            <div style="margin:20px 0;">
+                <div class="metric"><span class="m-lab">🌡️ SICAKLIK / BULUT</span><span class="m-val"><span id="m-temp">--</span>°C | %<span id="m-cloud">--</span></span></div>
+                <div class="metric"><span class="m-lab">💧 NEM ORANI</span><span class="m-val">%<span id="m-hum">--</span></span></div>
+                <div class="metric"><span class="m-lab">🌬️ RÜZGAR HIZI</span><span class="m-val"><span id="m-wind">--</span> km/h</span></div>
+                <div class="metric"><span class="m-lab">📡 GÖRÜŞ MESAFESİ</span><span class="m-val"><span id="m-vis">--</span> km</span></div>
+            </div>
+
+            <div class="efficiency-block">
+                <div class="m-lab">OPERASYONEL VERİMLİLİK</div>
+                <div id="m-eff" style="font-family:'Share Tech Mono'; color:var(--neon); font-size:1.4rem; margin-top:5px;">%--</div>
+                <div class="eff-bar-bg"><div id="eff-fill" class="eff-bar-fill"></div></div>
+            </div>
+            
+            <div class="fuel-block">
+                <div class="m-lab" style="color:var(--fuel);">ÖZEL RİSK ANALİZİ</div>
+                <div id="p-risk" style="font-family:'Share Tech Mono'; color:var(--fuel); font-size:0.9rem; margin-top:5px;">Lojistik Darboğazı</div>
+            </div>
+
+            <div id="m-status" class="status-hero">VERİ BEKLENİYOR...</div>
+        </div>
+        <div class="coord-footer">
+            <div style="text-align:center;"><div class="m-lab">ENLEM</div><div id="v-lat" style="color:var(--neon); font-family:'Share Tech Mono';">0.0000</div></div>
+            <div style="text-align:center;"><div class="m-lab">BOYLAM</div><div id="v-lng" style="color:var(--neon); font-family:'Share Tech Mono';">0.0000</div></div>
+        </div>
+    </div>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        const map = L.map('map', { zoomControl: false, attributionControl: false }).setView([20, 0], 2);
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}').addTo(map);
+
+        let curMarker = null;
+        let weatherCache = null;
+        let lastLat = 0;
+
+        const factoryPoints = [
+            // Blue/Red Points Data... (Önceki veri seti ile aynıdır)
+            { cat: "İtki ve Yakıt", sub: "Sıvı Yakıtlı Motor", loc: "Huntsville, AL, ABD", company: "Blue Origin", lat: 34.7304, lon: -86.5861, ship: "Karayolu", risk: "Yol Titreşimi", type: "blue" },
+            { cat: "İtki ve Yakıt", sub: "Sıvı Yakıtlı Motor", loc: "Vernon, Fransa", company: "ArianeGroup", lat: 49.0919, lon: 1.4884, ship: "Denizyolu", risk: "Fırtına Gecikmesi", type: "blue" },
+            { cat: "İtki ve Yakıt", sub: "Katı Yakıtlı Booster", loc: "Colleferro, İtalya", company: "Avio", lat: 41.7266, lon: 13.0039, ship: "Deniz/Havayolu", risk: "Patlayıcı Madde", type: "blue" },
+            { cat: "İtki ve Yakıt", sub: "Kriyojenik Tank", loc: "Michoud, LA, ABD", company: "NASA", lat: 30.0264, lon: -89.9143, ship: "Deniz (Mavna)", risk: "Hava Durumu", type: "blue" },
+            { cat: "İtki ve Yakıt", sub: "Yakıt Pompaları", loc: "Nagoya, Japonya", company: "MHI", lat: 35.1013, lon: 136.8837, ship: "Havayolu", risk: "Düşük Risk", type: "blue" },
+            { cat: "Elektronik", sub: "Uçuş Kontrol", loc: "Rochester, İngiltere", company: "BAE Systems", lat: 51.3789, lon: 0.5052, ship: "Havayolu", risk: "Çip Tedariği", type: "blue" },
+            { cat: "Elektronik", sub: "Haberleşme", loc: "Ankara, Türkiye", company: "ASELSAN", lat: 39.9686, lon: 32.7663, ship: "Kara/Havayolu", risk: "Düşük Risk", type: "blue" },
+            { cat: "Elektronik", sub: "Yıldız İzleyici", loc: "Paris, Fransa", company: "Sodern", lat: 48.7450, lon: 2.4851, ship: "Havayolu", risk: "İzin Gecikmesi", type: "blue" },
+            { cat: "Elektronik", sub: "Radyasyon Çipleri", loc: "Hsinchu, Tayvan", company: "TSMC", lat: 24.7732, lon: 120.9971, ship: "Havayolu", risk: "Jeopolitik Kriz", type: "blue" },
+            { cat: "Elektronik", sub: "Kablolama", loc: "Münih, Almanya", company: "Alt Yükleniciler", lat: 48.1351, lon: 11.5820, ship: "Karayolu", risk: "Düşük Risk", type: "blue" },
+            { cat: "Gövde/Yapısal", sub: "Faydalı Yük Koruyucu", loc: "Zürih, İsviçre", company: "Beyond Gravity", lat: 47.4116, lon: 8.5280, ship: "Karayolu", risk: "Tünel Sınırları", type: "blue" },
+            { cat: "Gövde/Yapısal", sub: "Isı Kalkanı", loc: "Denver, CO, ABD", company: "Lockheed Martin", lat: 39.5445, lon: -105.1096, ship: "Havayolu", risk: "Çatlama Riski", type: "blue" },
+            { cat: "Gövde/Yapısal", sub: "Grid Kanatçıklar", loc: "Hawthorne, CA, ABD", company: "SpaceX", lat: 33.9207, lon: -118.3278, ship: "Karayolu", risk: "Hammadde", type: "blue" },
+            { cat: "Gövde/Yapısal", sub: "Ana İskelet", loc: "Pekin, Çin", company: "CASC", lat: 39.8037, lon: 116.4211, ship: "Demiryolu", risk: "Ray Darboğazı", type: "blue" },
+            { cat: "Gövde/Yapısal", sub: "Basınçlı Modül", loc: "Torino, İtalya", company: "Thales Alenia", lat: 45.0779, lon: 7.5855, ship: "Havayolu", risk: "Özel Uçak Şartı", type: "blue" },
+            { cat: "Yaşam Destek", sub: "Güneş Paneli (Hücre)", loc: "Heilbronn, Almanya", company: "AZUR Space", lat: 49.1311, lon: 9.2132, ship: "Havayolu", risk: "Kırılganlık", type: "blue" },
+            { cat: "Yaşam Destek", sub: "Güneş Paneli (Montaj)", loc: "Ankara, Türkiye", company: "TUSAŞ", lat: 40.0768, lon: 32.5599, ship: "Karayolu", risk: "Düşük Risk", type: "blue" },
+            { cat: "Yaşam Destek", sub: "Li-İyon Batarya", loc: "Kyoto, Japonya", company: "GS Yuasa", lat: 34.9664, lon: 135.7360, ship: "Hava/Denizyolu", risk: "Tehlikeli Madde", type: "blue" },
+            { cat: "Yaşam Destek", sub: "Oksijen/Su Sistemleri", loc: "Friedrichshafen, Almanya", company: "Airbus DS", lat: 47.6698, lon: 9.4442, ship: "Demir/Havayolu", risk: "Sızdırmazlık", type: "blue" },
+            { cat: "İtki ve Yakıt", sub: "Dev Katı İticiler (SRB)", loc: "Promontory, UT, ABD", company: "Northrop Grumman", lat: 41.65961, lon: -112.44084, ship: "Demiryolu (Özel)", risk: "Kaza / Patlama", type: "red" },
+            { cat: "İtki ve Yakıt", sub: "Üst Aşama Motorları (RL10)", loc: "West Palm Beach, FL, ABD", company: "L3Harris (Aerojet)", lat: 26.90338, lon: -80.29807, ship: "Karayolu", risk: "Düşük Risk", type: "red" },
+            { cat: "İtki ve Yakıt", sub: "Vikas Sıvı Motorları", loc: "Mumbai, Hindistan", company: "Godrej Aerospace", lat: 19.10312, lon: 72.92382, ship: "Karayolu", risk: "Trafik Darboğazı", type: "red" },
+            { cat: "İtki ve Yakıt", sub: "Katı Yakıt Motorları", loc: "Tomioka, Japonya", company: "IHI Aerospace", lat: 36.30216, lon: 138.92915, ship: "Havayolu", risk: "Deprem Riski", type: "red" },
+            { cat: "Gövde/Yapısal", sub: "Uzay Uçağı (Dream Chaser)", loc: "Louisville, CO, ABD", company: "Sierra Space", lat: 39.96460, lon: -105.11746, ship: "Karayolu", risk: "Düşük Risk", type: "red" },
+            { cat: "Gövde/Yapısal", sub: "Mikro Fırlatıcı Gövdesi", loc: "Münih, Almanya", company: "Isar Aerospace", lat: 48.05298, lon: 11.66106, ship: "Karayolu", risk: "Düşük Risk", type: "red" },
+            { cat: "Mekanizma", sub: "Ayırma Sistemleri (Dispenser)", loc: "Linköping, İsveç", company: "Beyond Gravity", lat: 59.00999, lon: 15.76863, ship: "Havayolu", risk: "Hava Muhalefeti", type: "red" },
+            { cat: "Mekanizma", sub: "Uydu Bağlantı Mekanizmaları", loc: "Kongsberg, Norveç", company: "Kongsberg Defence", lat: 60.44638, lon: 5.26245, ship: "Karayolu/Deniz", risk: "Kış Şartları", type: "red" },
+            { cat: "Mekanizma", sub: "Anten ve İtki Mekanizmaları", loc: "Madrid, İspanya", company: "SENER Aeroespacial", lat: 40.63063, lon: -3.70239, ship: "Havayolu", risk: "Düşük Risk", type: "red" }
+        ];
+
+        factoryPoints.forEach(p => {
+            const color = p.type === 'red' ? '#ff3e3e' : '#00e5ff';
+            const marker = L.circleMarker([p.lat, p.lon], {
+                radius: 6, color: color, weight: 2, fillOpacity: 0.6
+            }).addTo(map);
+            
+            marker.on('click', (e) => {
+                L.DomEvent.stopPropagation(e);
+                lastLat = p.lat;
+                document.getElementById('v-lat').innerText = p.lat.toFixed(4);
+                document.getElementById('v-lng').innerText = p.lon.toFixed(4);
+                document.getElementById('uiRoot').style.display = 'block';
+                document.getElementById('logistic-ext').style.display = 'block'; // Detayları göster
+                updateUIData(p);
+                fetchWeatherData(p.lat, p.lon);
+            });
+        });
+
+        map.on('click', async (e) => {
+            const { lat, lng } = e.latlng.wrap();
+            lastLat = lat;
+            document.getElementById('v-lat').innerText = lat.toFixed(4);
+            document.getElementById('v-lng').innerText = lng.toFixed(4);
+            document.getElementById('uiRoot').style.display = 'block';
+            document.getElementById('logistic-ext').style.display = 'none'; // Detayları gizle
+            
+            updateUIData({ company: "Özel Analiz Hedefi", loc: "Saha Koordinatları" });
+            fetchWeatherData(lat, lng);
+            if(curMarker) map.removeLayer(curMarker);
+            curMarker = L.circleMarker([lat, lng], { radius: 10, color: '#00fbff', weight: 2, fillOpacity: 0.3 }).addTo(map);
+        });
+
+        function updateUIData(data) {
+            document.getElementById('p-company').innerText = data.company || "Analiz Hedefi";
+            document.getElementById('p-location').innerText = data.loc || "--";
+            document.getElementById('p-cat').innerText = data.cat || "--";
+            document.getElementById('p-sub').innerText = data.sub || "--";
+            document.getElementById('p-ship').innerText = data.ship || "--";
+            document.getElementById('p-risk').innerText = data.risk || "--";
+        }
+
+        async function fetchWeatherData(lat, lon) {
+            try {
+                const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&hourly=relativehumidity_2m,visibility,cloudcover&timezone=auto`);
+                weatherCache = await res.json();
+                processData();
+            } catch (err) { console.error("API Hatası", err); }
+        }
+
+        function processData() {
+            if(!weatherCache) return;
+            const current = weatherCache.current_weather;
+            const humidity = weatherCache.hourly.relativehumidity_2m[0];
+            const cloud = weatherCache.hourly.cloudcover[0];
+            const visibility = weatherCache.hourly.visibility[0] / 1000;
+            let efficiency = 100;
+            if(current.temperature < 10) efficiency -= (10 - current.temperature) * 1.5;
+            if(humidity > 60) efficiency -= (humidity - 60) * 0.5;
+            efficiency = Math.max(0, Math.min(100, Math.round(efficiency)));
+
+            document.getElementById('m-temp').innerText = current.temperature;
+            document.getElementById('m-cloud').innerText = cloud;
+            document.getElementById('m-hum').innerText = humidity;
+            document.getElementById('m-wind').innerText = current.windspeed;
+            document.getElementById('m-vis').innerText = visibility.toFixed(1);
+            document.getElementById('m-eff').innerText = "%" + efficiency;
+            document.getElementById('eff-fill').style.width = efficiency + "%";
+            
+            const status = document.getElementById('m-status');
+            if(efficiency < 40) { status.innerText = "ABORT: DÜŞÜK VERİM"; status.className = "status-hero abort"; }
+            else { status.innerText = "UÇUŞA UYGUN"; status.className = "status-hero go"; }
+        }
+
+        function toggleSearch() { document.getElementById('search-side').classList.toggle('active'); }
+        async function runSearchOp() {
+            const q = document.getElementById("search-in").value;
+            if(!q) return;
+            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`);
+            const data = await res.json();
+            if(data.length > 0) {
+                map.flyTo([data[0].lat, data[0].lon], 8);
+                setTimeout(() => map.fireEvent('click', { latlng: L.latLng(data[0].lat, data[0].lon) }), 1500);
+            }
+        }
+    </script>
+</body>
+</html>

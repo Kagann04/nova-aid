@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nova-Aid</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700&family=Share+Tech+Mono&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --neon: #00e5ff;
+            --bg: #000;
+            --glass: rgba(13, 17, 23, 0.9);
+            --safe: #00ff88;
+            --danger: #ff3e3e;
+            --fuel: #ffcc00;
+            --border: rgba(0, 229, 255, 0.25);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            background: #000;
+            overflow: hidden;
+            font-family: 'Outfit', sans-serif;
+            color: #fff;
+        }
+
+        canvas {
+            display: block;
+            cursor: grab;
+        }
+
+        canvas:active {
+            cursor: grabbing;
+        }
+
+        /* UI Overlays */
+        #ui-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 100;
+            background: radial-gradient(circle, transparent 70%, rgba(0, 0, 0, 0.95) 100%);
+        }
+
+        #hover-label {
+            position: fixed;
+            padding: 8px 12px;
+            background: var(--glass);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--neon);
+            font-size: 0.7rem;
+            font-weight: bold;
+            display: none;
+            pointer-events: none;
+            z-index: 500;
+            backdrop-filter: blur(15px);
+            letter-spacing: 1px;
+            box-shadow: 0 0 15px rgba(0, 229, 255, 0.3);
+            text-transform: uppercase;
+        }
+
+        /* Ana Operasyon Butonları */
+        .ctl-group {
+            position: absolute;
+            top: 30px;
+            left: 30px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            pointer-events: auto;
+        }
+
+        .hud-btn {
+            background: var(--glass);
+            border: 1px solid var(--border);
+            color: #8fb9c6;
+            padding: 12px 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            backdrop-filter: blur(25px);
+            font-family: 'Outfit', sans-serif;
+            font-size: 0.65rem;
+            letter-spacing: 3px;
+            transition: 0.4s;
+            text-transform: uppercase;
+            width: 260px;
+            border-left: 3px solid var(--neon);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+        }
+
+        .hud-btn:hover {
+            background: var(--neon);
+            color: #000;
+            transform: translateX(8px);
+            box-shadow: 0 0 20px rgba(0, 229, 255, 0.3);
+        }
+
+        /* Sağ Veri Analiz Paneli */
+        #info-panel {
+            position: absolute;
+            top: 30px;
+            right: 30px;
+            width: 360px;
+            max-height: 90vh;
+            background: var(--glass);
+            backdrop-filter: blur(60px);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 25px;
+            color: #fff;
+            pointer-events: auto;
+            transform: translateX(450px);
+            transition: 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+            box-shadow: 0 40px 100px rgba(0, 0, 0, 1);
+            border-right: 5px solid var(--neon);
+            overflow-y: auto;
+        }
+
+        #info-panel.active {
+            transform: translateX(0);
+        }
+
+        .hud-header {
+            font-size: 0.65rem;
+            letter-spacing: 5px;
+            color: var(--neon);
+            text-transform: uppercase;
+            margin-bottom: 20px;
+            border-bottom: 1px solid rgba(0, 229, 255, 0.2);
+            padding-bottom: 10px;
+        }
+
+        .info-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--neon);
+            margin-bottom: 5px;
+        }
+
+        .info-loc {
+            font-size: 0.7rem;
+            color: #8899aa;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 15px;
+        }
+
+        .mass-display {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 15px;
+            width: 100%;
+            text-align: center;
+            margin: 15px 0;
+        }
+
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            background: rgba(255, 255, 255, 0.03);
+            padding: 8px;
+            border-radius: 6px;
+        }
+
+        .m-lab {
+            font-size: 0.55rem;
+            color: #8899aa;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .m-val {
+            font-family: 'Share Tech Mono';
+            color: #fff;
+            font-size: 0.8rem;
+        }
+
+        .efficiency-block {
+            margin: 15px 0;
+            background: rgba(0, 229, 255, 0.05);
+            border: 1px solid var(--border);
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 3px solid var(--neon);
+        }
+
+        .eff-bar-bg {
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            margin-top: 10px;
+            overflow: hidden;
+        }
+
+        .eff-bar-fill {
+            height: 100%;
+            background: var(--neon);
+            width: 0%;
+            transition: 1s cubic-bezier(0.16, 1, 0.3, 1);
+            box-shadow: 0 0 10px var(--neon);
+        }
+
+        .fuel-block {
+            margin-top: 15px;
+            background: rgba(255, 204, 0, 0.05);
+            border: 1px dashed rgba(255, 204, 0, 0.3);
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 3px solid var(--fuel);
+        }
+
+        .status-hero {
+            margin-top: 20px;
+            padding: 18px;
+            text-align: center;
+            font-family: 'Share Tech Mono';
+            font-weight: bold;
+            border-radius: 6px;
+            border: 1px solid;
+            letter-spacing: 1px;
+            font-size: 0.8rem;
+        }
+
+        .go {
+            color: var(--safe);
+            border-color: var(--safe);
+            background: rgba(0, 255, 136, 0.05);
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.1);
+        }
+
+        .abort {
+            color: var(--danger);
+            border-color: var(--danger);
+            background: rgba(255, 62, 62, 0.05);
+            box-shadow: 0 0 20px rgba(255, 62, 62, 0.1);
+        }
+
+        /*Side Terminal */
+        #search-side {
+            position: fixed;
+            top: 30px;
+            left: -400px;
+            width: 350px;
+            height: calc(100vh - 60px);
+            background: rgba(1, 4, 9, 0.95);
+            backdrop-filter: blur(40px);
+            border: 1px solid var(--border);
+            transition: 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+            padding: 30px;
+            z-index: 2000;
+            border-radius: 0 12px 12px 0;
+            pointer-events: auto;
+        }
+
+        #search-side.active {
+            left: 0;
+        }
+
+        .search-in {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 12px;
+            width: 100%;
+            color: var(--neon);
+            font-family: 'Share Tech Mono';
+            margin-top: 10px;
+            outline: none;
+            border-left: 3px solid var(--neon);
+        }
+
+        #transitionOverlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 1.5s;
+            z-index: 3000;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="transitionOverlay"></div>
+    <div id="hover-label">--</div>
+
+    <div id="search-side">
+        <div class="hud-header">Konum Tespiti</div>
+        <input id="search-in" class="search-in" placeholder="İŞLETME VEYA ŞEHİR..."
+            onkeypress="if(event.key==='Enter') runSearchOp()">
+        <button onclick="runSearchOp()"
+            style="width:100%; margin-top:15px; background:var(--neon); border:none; padding:12px; font-weight:bold; cursor:pointer; border-radius:6px; font-size:0.7rem; letter-spacing:1px; color:#000;">ANALİZ
+            ET</button>
+        <div id="search-logs"
+            style="margin-top:20px; font-family:'Share Tech Mono'; font-size:0.7rem; color:#667788; line-height:1.6;">>
+            SİSTEM ÇEVRİMİÇİ...</div>
+        <div style="margin-top:20px; text-align:center; color:#555; cursor:pointer; font-size:0.7rem;"
+            onclick="toggleSearch()">[ TERMİNALİ KAPAT ]</div>
+    </div>
+
+    <div class="ctl-group">
+        <button class="hud-btn" onclick="toggleSearch()">📡 KONUM TERMİNALİ</button>
+        <button class="hud-btn" onclick="window.location.reload()">🔄 SİSTEM SIFIRLA</button>
+        <button class="hud-btn" onclick="window.location.href='index2.html'">🗺️ HARİTA</button>
+    </div>
+
+    <div id="ui-overlay">
+        <div id="info-panel">
+            <div id="close-panel"
+                style="position:absolute; top:20px; right:20px; cursor:pointer; color:#445566; font-size:0.75rem;"
+                onclick="closeInfo()">[ X ]</div>
+            <div class="hud-header">OPTİMUM FIRLATMA SİMİLATÖRÜ</div>
+            <div class="info-title" id="p-name">--</div>
+            <div class="info-loc" id="p-loc">--</div>
+
+            <div class="m-lab">ROKET KÜTLESİ (KG)</div>
+            <div class="mass-display"><span
+                    style="font-family:'Share Tech Mono'; font-size:1.5rem; color:var(--neon);">29,000 KG</span></div>
+
+            <div style="margin:10px 0;">
+                <div class="metric"><span class="m-lab">🌡️ SICAKLIK / BULUT</span><span class="m-val"><span
+                            id="m-temp">--</span>°C | %<span id="m-cloud">--</span></span></div>
+                <div class="metric"><span class="m-lab">💧 NEM ORANI</span><span class="m-val">%<span
+                            id="m-hum">--</span></span></div>
+                <div class="metric"><span class="m-lab">🌬️ RÜZGAR HIZI</span><span class="m-val"><span
+                            id="m-wind">--</span> km/h</span></div>
+                <div class="metric"><span class="m-lab">📡 GÖRÜŞ MESAFESİ</span><span class="m-val"><span
+                            id="m-vis">--</span> km</span></div>
+            </div>
+
+            <div class="efficiency-block">
+                <div class="m-lab">SİSTEM ENERJİ VERİMLİLİĞİ</div>
+                <div id="m-eff"
+                    style="font-family:'Share Tech Mono'; color:var(--neon); font-size:1.4rem; margin-top:5px;">%--
+                </div>
+                <div class="eff-bar-bg">
+                    <div id="eff-fill" class="eff-bar-fill"></div>
+                </div>
+            </div>
+
+            <div class="fuel-block">
+                <div class="m-lab" style="color:var(--fuel);">GEREKLİ YAKIT (%85)</div>
+                <div id="m-fuel"
+                    style="font-family:'Share Tech Mono'; color:var(--fuel); font-size:1.5rem; margin-top:5px;">-- KG
+                </div>
+                <div id="p-coord" style="font-size:0.55rem; color:#8899aa; margin-top:4px;">COORD: --, --</div>
+            </div>
+
+            <div id="m-status" class="status-hero">VERİ BEKLENİYOR...</div>
+
+            <button onclick="zoomToDetails()"
+                style="width:100%; margin-top:15px; background:var(--neon); border:none; padding:15px; font-weight:bold; cursor:pointer; font-family:'Outfit'; font-size:0.75rem; letter-spacing:3px; border-radius:6px; text-transform:uppercase; color:#000; transition:0.4s;">MİSYON
+                AKTİF ET</button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <script>
+        let scene, camera, renderer, earth, clouds, controls, raycaster, mouse;
+        let isRedirecting = false;
+        let invisibleMarkers = [];
+        let networkArcs = [];
+        let lineGroups = [];
+        let activeLat = null;
+        let activeLon = null;
+
+        let moon, moonGlow, rayGroup;
+        const R = 5;
+        const MOON_DIST = R * 7, MOON_TILT = 0.09, MOON_SIZE = R * 0.27;
+
+        const pointsList = [
+            { name: "Blue Origin", lat: 34.7304, lon: -86.5861, cat: "İtki ve Yakıt", sub: "Motor Fabrikası", loc: "Huntsville, ABD" },
+            { name: "ArianeGroup", lat: 49.0919, lon: 1.4884, cat: "İtki", sub: "Sıvı Yakıt", loc: "Vernon, Fransa" },
+            { name: "Avio", lat: 41.7266, lon: 13.0039, cat: "Booster", sub: "Solid Fuel", loc: "İtalya" },
+            { name: "ASELSAN", lat: 39.9686, lon: 32.7663, cat: "Elektronik", sub: "Lojistik", loc: "Ankara, Türkiye" },
+            { name: "SpaceX", lat: 33.9207, lon: -118.3278, cat: "Gövde", sub: "Üretim", loc: "California, ABD" }
+        ];
+
+        function glowTex(res, stops) {
+            const cv = document.createElement('canvas');
+            cv.width = cv.height = res;
+            const ctx = cv.getContext('2d');
+            const g = ctx.createRadialGradient(res / 2, res / 2, 0, res / 2, res / 2, res / 2);
+            stops.forEach(([t, r, gr, b, a]) => g.addColorStop(t, `rgba(${r},${gr},${b},${a})`));
+            ctx.fillStyle = g; ctx.fillRect(0, 0, res, res);
+            return new THREE.CanvasTexture(cv);
+        }
+
+        function latLonToVector3(lat, lon, radius) {
+            const phi = (90 - lat) * (Math.PI / 180);
+            const theta = (lon + 180) * (Math.PI / 180);
+            const x = -(radius * Math.sin(phi) * Math.cos(theta));
+            const y = radius * Math.cos(phi);
+            const z = radius * Math.sin(phi) * Math.sin(theta);
+            return new THREE.Vector3(x, y, z);
+        }
+
+        function init() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 8000);
+            camera.position.z = 20;
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            const SUN_POS = new THREE.Vector3(R * 22, R * 8, R * 6);
+            const sunDirLight = new THREE.DirectionalLight(0xfff4cc, 2.2);
+            sunDirLight.position.copy(SUN_POS);
+            scene.add(sunDirLight);
+            scene.add(new THREE.AmbientLight(0x223366, 0.55));
+
+            // SUN
+            const SUN_SIZE = R * 2.4;
+            const sunCore = new THREE.Mesh(new THREE.SphereGeometry(SUN_SIZE, 48, 48), new THREE.MeshBasicMaterial({ color: 0xFFF8E0 }));
+            sunCore.position.copy(SUN_POS);
+            scene.add(sunCore);
+
+            const softSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+                map: glowTex(512, [[0, 255, 255, 240, 1], [0.1, 255, 240, 160, 0.7], [0.25, 255, 180, 40, 0.3], [0.5, 255, 100, 0, 0.1], [0.75, 200, 40, 0, 0.03], [1, 100, 0, 0, 0]]),
+                transparent: true, blending: THREE.AdditiveBlending, depthWrite: false
+            }));
+            softSprite.position.copy(SUN_POS);
+            softSprite.scale.set(SUN_SIZE * 13, SUN_SIZE * 13, 1);
+            scene.add(softSprite);
+
+            rayGroup = new THREE.Group();
+            rayGroup.position.copy(SUN_POS);
+            scene.add(rayGroup);
+            for (let i = 0; i < 14; i++) {
+                const ray = new THREE.Mesh(new THREE.PlaneGeometry(SUN_SIZE * 0.15, SUN_SIZE * 4), new THREE.MeshBasicMaterial({ color: 0xFFDD44, transparent: true, opacity: 0.04, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false }));
+                ray.rotation.z = (i / 14) * Math.PI * 2;
+                rayGroup.add(ray);
+            }
+
+            // MOON
+            moon = new THREE.Mesh(new THREE.SphereGeometry(MOON_SIZE, 48, 48), new THREE.MeshStandardMaterial({ roughness: 0.95, metalness: 0, color: 0xCCCCBB }));
+            scene.add(moon);
+            moonGlow = new THREE.Mesh(new THREE.SphereGeometry(MOON_SIZE * 1.3, 32, 32), new THREE.MeshBasicMaterial({ color: 0xBBCCFF, transparent: true, opacity: 0.08, side: THREE.BackSide, blending: THREE.AdditiveBlending, depthWrite: false }));
+            scene.add(moonGlow);
+            new THREE.TextureLoader().load('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/moon_1024.jpg', tex => { moon.material.map = tex; moon.material.needsUpdate = true; });
+
+            // EARTH
+            const earthGeom = new THREE.SphereGeometry(R, 64, 64);
+            const earthMat = new THREE.MeshPhongMaterial({
+                map: new THREE.TextureLoader().load('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_atmos_2048.jpg'),
+                bumpMap: new THREE.TextureLoader().load('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_normal_2048.jpg'),
+                bumpScale: 0.15,
+                specularMap: new THREE.TextureLoader().load('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_specular_2048.jpg'),
+                specular: new THREE.Color(0x111111)
+            });
+            earth = new THREE.Mesh(earthGeom, earthMat);
+            scene.add(earth);
+
+            const cloudGeom = new THREE.SphereGeometry(R + 0.12, 64, 64);
+            const cloudMat = new THREE.MeshPhongMaterial({
+                map: new THREE.TextureLoader().load('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_clouds_1024.png'),
+                transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending
+            });
+            clouds = new THREE.Mesh(cloudGeom, cloudMat);
+            scene.add(clouds);
+
+            // STARS
+            const starGeom = new THREE.BufferGeometry();
+            const starsPos = [];
+            for (let i = 0; i < 9000; i++) starsPos.push((Math.random() - 0.5) * 6000, (Math.random() - 0.5) * 6000, (Math.random() - 0.5) * 6000);
+            starGeom.setAttribute('position', new THREE.Float32BufferAttribute(starsPos, 3));
+            scene.add(new THREE.Points(starGeom, new THREE.PointsMaterial({ color: 0xffffff, size: 0.3 })));
+
+            createFlowSystem();
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.minDistance = 6.5;
+            controls.maxDistance = 150;
+
+            window.addEventListener('resize', onWindowResize, false);
+            window.addEventListener('mousemove', onMouseMove, false);
+            window.addEventListener('click', onMouseClick, false);
+            // Çift tıklama dinleyicisi eklendi
+            window.addEventListener('dblclick', onMouseDoubleClick, false);
+
+            animate();
+        }
+
+        function createFlowSystem() {
+            pointsList.forEach(p => {
+                const pos = latLonToVector3(p.lat, p.lon, R + 0.1);
+                const hit = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 8), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0 }));
+                hit.position.copy(pos);
+                hit.userData = p;
+                earth.add(hit);
+                invisibleMarkers.push(hit);
+            });
+            for (let i = 0; i < invisibleMarkers.length; i++) {
+                for (let j = i + 1; j < invisibleMarkers.length; j++) {
+                    createFlowArc(invisibleMarkers[i].position, invisibleMarkers[j].position, 0x00e5ff);
+                }
+            }
+        }
+
+        function createFlowArc(v1, v2, color) {
+            const dist = v1.distanceTo(v2);
+            const mid = v1.clone().lerp(v2, 0.5).normalize().multiplyScalar(R + 0.1 + Math.min(dist * 0.4, 2.2));
+            const curve = new THREE.QuadraticBezierCurve3(v1, mid, v2);
+            const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(curve.getPoints(32)), new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.15, blending: THREE.AdditiveBlending }));
+            earth.add(line);
+            lineGroups.push(line);
+            const part = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 8), new THREE.MeshBasicMaterial({ color, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.8 }));
+            earth.add(part);
+            networkArcs.push({ curve, part, progress: Math.random() });
+        }
+
+        function onMouseMove(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(invisibleMarkers);
+            const label = document.getElementById('hover-label');
+            if (intersects.length > 0) {
+                label.style.display = 'block';
+                label.style.left = event.clientX + 15 + 'px';
+                label.style.top = event.clientY - 15 + 'px';
+                label.innerText = intersects[0].object.userData.name;
+                document.body.style.cursor = 'pointer';
+            } else {
+                label.style.display = 'none';
+                document.body.style.cursor = 'grab';
+            }
+        }
+
+        // Tek tıklama: Veri Analizi
+        function onMouseClick(event) {
+            raycaster.setFromCamera(mouse, camera);
+            // 1) Markera tıkladı mı?
+            const markerIntersects = raycaster.intersectObjects(invisibleMarkers);
+            if (markerIntersects.length > 0) {
+                fetchPointAnalysis(markerIntersects[0].object.userData);
+                return;
+            }
+
+            // 2) Dünya'ya (boş yere) tıkladıysa koordinat panelini aç
+            const earthIntersects = raycaster.intersectObject(earth);
+            if (earthIntersects.length > 0) {
+                const pt = earthIntersects[0].point.clone().normalize();
+                const phi = Math.acos(pt.y);
+                const lat = 90 - (phi * 180 / Math.PI);
+                let theta = Math.atan2(pt.z, -pt.x);
+                let lon = (theta * 180 / Math.PI) - 180;
+                while (lon < -180) lon += 360;
+                while (lon > 180) lon -= 360;
+                
+                fetchPointAnalysis({
+                    name: "SERBEST KOORDİNAT",
+                    loc: "HEDEF BÖLGE",
+                    lat: lat,
+                    lon: lon
+                });
+            }
+        }
+
+        // Çift tıklama: Haritaya Geçiş
+        function onMouseDoubleClick(event) {
+            raycaster.setFromCamera(mouse, camera);
+            const markerIntersects = raycaster.intersectObjects(invisibleMarkers);
+            if (markerIntersects.length > 0) {
+                activeLat = markerIntersects[0].object.userData.lat;
+                activeLon = markerIntersects[0].object.userData.lon;
+                zoomToDetails();
+            } else {
+                const earthIntersects = raycaster.intersectObject(earth);
+                if (earthIntersects.length > 0) {
+                    const pt = earthIntersects[0].point.clone().normalize();
+                    const phi = Math.acos(pt.y);
+                    const lat = 90 - (phi * 180 / Math.PI);
+                    let theta = Math.atan2(pt.z, -pt.x);
+                    let lon = (theta * 180 / Math.PI) - 180;
+                    while (lon < -180) lon += 360;
+                    while (lon > 180) lon -= 360;
+                    
+                    activeLat = lat;
+                    activeLon = lon;
+                    zoomToDetails();
+                }
+            }
+        }
+
+        function toggleSearch() { document.getElementById('search-side').classList.toggle('active'); }
+
+        async function fetchPointAnalysis(data) {
+            activeLat = data.lat;
+            activeLon = data.lon;
+            const panel = document.getElementById('info-panel');
+            document.getElementById('p-name').innerText = data.name.toUpperCase();
+            document.getElementById('p-loc').innerText = (data.loc || "Bilinmeyen Üs").toUpperCase();
+            document.getElementById('p-coord').innerText = `COORD: ${data.lat.toFixed(4)}, ${data.lon.toFixed(4)}`;
+            panel.classList.add('active');
+
+            try {
+                const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${data.lat}&longitude=${data.lon}&current_weather=true&hourly=relativehumidity_2m,visibility,cloudcover&timezone=auto`);
+                const weather = await res.json();
+                processFlightData(weather, data.lat);
+            } catch (err) { console.error("API Veri Hatası", err); }
+        }
+
+        function processFlightData(weather, lat) {
+            const current = weather.current_weather;
+            const humidity = weather.hourly.relativehumidity_2m[0];
+            const cloud = weather.hourly.cloudcover[0];
+            const visibility = weather.hourly.visibility[0] / 1000;
+
+            const dryMass = 29000;
+            const totalMass = dryMass / 0.15;
+            const baseFuel = totalMass * 0.85;
+            const equatorFactor = Math.cos(lat * Math.PI / 180);
+            const latPenalty = 1 + (0.2 * (1 - equatorFactor));
+            const finalFuel = Math.round(baseFuel * latPenalty);
+
+            let efficiency = 100;
+            if (current.temperature < 10) efficiency -= (10 - current.temperature) * 1.5;
+            if (current.temperature > 35) efficiency -= (current.temperature - 35) * 2;
+            if (humidity > 60) efficiency -= (humidity - 60) * 0.5;
+            efficiency -= (cloud * 0.2);
+            if (current.windspeed > 20) efficiency -= (current.windspeed - 20) * 0.5;
+            efficiency = Math.max(0, Math.min(100, Math.round(efficiency)));
+
+            let abort = false;
+            let reason = "";
+            if (current.windspeed > 30) { abort = true; reason = "YÜKSEK RÜZGAR"; }
+            if (current.temperature < -5 || current.temperature > 48) { abort = true; reason = "SICAKLIK"; }
+            if (efficiency < 40) { abort = true; reason = "DÜŞÜK VERİM"; }
+
+            document.getElementById('m-temp').innerText = current.temperature;
+            document.getElementById('m-cloud').innerText = cloud;
+            document.getElementById('m-hum').innerText = humidity;
+            document.getElementById('m-wind').innerText = current.windspeed;
+            document.getElementById('m-vis').innerText = visibility.toFixed(1);
+            document.getElementById('m-eff').innerText = "%" + efficiency;
+            document.getElementById('eff-fill').style.width = efficiency + "%";
+            document.getElementById('m-fuel').innerText = finalFuel.toLocaleString() + " KG";
+
+            const status = document.getElementById('m-status');
+            if (abort) { status.innerText = "ABORT: " + reason; status.className = "status-hero abort"; }
+            else { status.innerText = "MİSYON: UÇUŞA UYGUN"; status.className = "status-hero go"; }
+        }
+
+        async function runSearchOp() {
+            const q = document.getElementById("search-in").value;
+            const logs = document.getElementById("search-logs");
+            if (!q) return;
+            logs.innerHTML = `> "${q.toUpperCase()}" ARANIYOR...`;
+            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`);
+            const data = await res.json();
+            if (data.length > 0) {
+                logs.innerHTML += `<br>> LOKASYON BULUNDU. YÖNLENDİRME BAŞLATILIYOR...`;
+                const lat = parseFloat(data[0].lat);
+                const lon = parseFloat(data[0].lon);
+                flyToPos(lat, lon);
+                setTimeout(() => fetchPointAnalysis({ name: q, lat, lon }), 1200);
+            } else { logs.innerHTML += `<br>> SONUÇ BULUNAMADI.`; }
+        }
+
+        function flyToPos(lat, lon) {
+            const targetPos = latLonToVector3(lat, lon, 18);
+            const steps = 50; let count = 0;
+            const loop = setInterval(() => {
+                count++;
+                camera.position.lerp(targetPos, 0.1);
+                camera.lookAt(0, 0, 0);
+                if (count >= steps) clearInterval(loop);
+            }, 16);
+        }
+
+        function closeInfo() { document.getElementById('info-panel').classList.remove('active'); }
+
+        function zoomToDetails() {
+            // Geçiş kararmasını başlat
+            document.getElementById('transitionOverlay').style.opacity = '1';
+            document.getElementById('transitionOverlay').style.pointerEvents = 'auto';
+            setTimeout(() => {
+                if (activeLat !== null && activeLon !== null) {
+                    window.location.href = `index2.html?lat=${activeLat.toFixed(6)}&lng=${activeLon.toFixed(6)}`;
+                } else {
+                    window.location.href = 'index2.html';
+                }
+            }, 1000);
+        }
+
+        function onWindowResize() { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const time = Date.now() * 0.001;
+            earth.rotation.y += 0.0001;
+            clouds.rotation.y += 0.0002;
+            if (moon) {
+                const a = time * 0.12;
+                moon.position.set(Math.cos(a) * MOON_DIST, Math.sin(a) * MOON_DIST * Math.sin(MOON_TILT), Math.sin(a) * MOON_DIST);
+                moonGlow.position.copy(moon.position);
+            }
+            if (rayGroup) rayGroup.rotation.z += 0.001;
+            const lineOp = 0.15 + Math.sin(time * 2) * 0.08;
+            lineGroups.forEach(l => { l.material.opacity = lineOp; });
+            networkArcs.forEach(a => {
+                a.progress += 0.0045;
+                if (a.progress > 1) a.progress = 0;
+                a.part.position.copy(a.curve.getPointAt(a.progress));
+            });
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        init();
+
+        window.addEventListener('DOMContentLoaded', () => {
+            const params = new URLSearchParams(window.location.search);
+            const lat = params.get('lat');
+            const lng = params.get('lng');
+            
+            if(lat && lng) {
+                const targetLat = parseFloat(lat);
+                const targetLon = parseFloat(lng);
+                
+                setTimeout(() => {
+                    flyToPos(targetLat, targetLon);
+                    
+                    setTimeout(() => fetchPointAnalysis({ 
+                        name: "HEDEF BÖLGE", 
+                        lat: targetLat, 
+                        lon: targetLon,
+                        loc: "ÖZEL KOORDİNAT"
+                    }), 1200);
+                }, 500);
+            }
+        });
+    </script>
+</body>
+
+</html>
